@@ -16,7 +16,7 @@ pretty_name: Qwen3.5-4B-Base Math Blind Spots
 This dataset contains math prompts where `Qwen/Qwen3.5-4B-Base` produced incorrect answers.
 
 - Model tested: [Qwen/Qwen3.5-4B-Base](https://huggingface.co/Qwen/Qwen3.5-4B-Base)
-- Fields: `input`, `expected_output`, `model_output`, `parsed_model_answer`, `topic`, `generation_mode`, `model_id`
+- Fields: `id`, `input`, `expected_output`, `model_output`, `parsed_model_answer`, `model_id`
 
 ## How The Model Was Loaded
 
