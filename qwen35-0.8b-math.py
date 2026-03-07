@@ -1,10 +1,14 @@
+import torch
+from datasets import Dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
+
 import os
 import re
 from fractions import Fraction
 
 
 MODEL_ID = "Qwen/Qwen3.5-0.8B"
-DATASET_SIZE = 10
+DATASET_SIZE = 20
 MAX_NEW_TOKENS = 80
 
 PUSH_TO_HUB = True
@@ -14,6 +18,11 @@ PARQUET_NAME = "train.parquet"
 README_PATH = "README.md"
 
 NUMBER_PATTERN = re.compile(r"-?\d+\s*/\s*-?\d+|-?\d+\.\d+|-?\d+")
+SYSTEM_PROMPT = (
+    "You are solving a math problem. "
+    "Do not think. Do not show steps. "
+    "Return only the final numeric answer."
+)
 
 PROBLEMS = """
 p01|Compute 98765 * 4321.|426763565
@@ -130,28 +139,9 @@ def load_problems():
     return rows
 
 
-def print_upload_commands(parquet_path):
-    print("\nRun these commands to upload a public dataset with hf CLI:")
-    print("uv run hf auth login")
-    print(
-        f"uv run hf repo create {DATASET_REPO_ID} --repo-type dataset --no-private --exist-ok"
-    )
-    print(
-        f"uv run hf upload {DATASET_REPO_ID} \"{parquet_path}\" {PARQUET_NAME} --repo-type dataset"
-    )
-    print(
-        f"uv run hf upload {DATASET_REPO_ID} \"{README_PATH}\" README.md --repo-type dataset"
-    )
-
-
 def main():
-    import torch
-    from datasets import Dataset
-    from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-
     problems = load_problems()
     print(f"Loaded {len(problems)} math prompts.")
-    print("Running mode: greedy")
 
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -164,7 +154,7 @@ def main():
 
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        torch_dtype=dtype,
+        dtype=dtype,
         trust_remote_code=True,
     )
 
@@ -173,27 +163,38 @@ def main():
     elif torch.backends.mps.is_available():
         model = model.to("mps")
 
-    generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
+    generation_config = GenerationConfig(
+        do_sample=False,
+        max_new_tokens=MAX_NEW_TOKENS,
+        pad_token_id=tokenizer.eos_token_id,
+        eos_token_id=tokenizer.eos_token_id,
+    )
 
     mistakes = []
+    checked_count = 0
     for idx, item in enumerate(problems, start=1):
-        prompt = (
-            "You are solving a math problem.\n"
-            "Do not think. Do not show steps.\n"
-            "Return only the final numeric answer.\n"
-            f"Problem: {item['input']}\n"
-            "Final answer:"
+        checked_count = idx
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": item["input"]},
+        ]
+        prompt = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
         )
+        model_inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-        output = generator(
-            prompt,
-            do_sample=False,
-            max_new_tokens=MAX_NEW_TOKENS,
-            return_full_text=True,
-            pad_token_id=tokenizer.eos_token_id,
-        )[0]["generated_text"]
+        with torch.no_grad():
+            output_ids = model.generate(
+                **model_inputs,
+                generation_config=generation_config,
+            )
 
-        completion = output[len(prompt):].strip() if output.startswith(prompt) else output.strip()
+        new_token_ids = output_ids[0, model_inputs["input_ids"].shape[1]:]
+        completion = tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
+        if not completion:
+            completion = tokenizer.decode(new_token_ids, skip_special_tokens=False).strip()
         correct, parsed = is_correct(item["expected_output"], completion)
 
         if not correct:
@@ -207,13 +208,14 @@ def main():
                     "model_id": MODEL_ID,
                 }
             )
-            if len(mistakes) >= DATASET_SIZE:
-                break
 
         if idx % 10 == 0:
             print(f"Checked {idx}/{len(problems)} prompts - mistakes found: {len(mistakes)}")
+        if len(mistakes) >= DATASET_SIZE:
+            break
 
     print(f"\nMistakes collected: {len(mistakes)}")
+    print(f"Checked {checked_count}/{len(problems)} prompts total.")
     if len(mistakes) < DATASET_SIZE:
         raise RuntimeError(f"Only found {len(mistakes)} mistakes. Add more prompts.")
 
@@ -224,10 +226,6 @@ def main():
 
     print("Saved local output:")
     print("-", parquet_path)
-
-    if PUSH_TO_HUB:
-        print_upload_commands(parquet_path)
-
 
 if __name__ == "__main__":
     main()
