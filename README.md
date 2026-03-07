@@ -36,7 +36,7 @@ The script writes:
 
 ```bash
 uv run hf auth login
-uv run hf repo create hedgehog0/Qwen3.5-0.8B-Math-Questions --repo-type dataset --no-private --exist-ok
+uv run hf repos create hedgehog0/Qwen3.5-0.8B-Math-Questions --repo-type dataset --private=false --exist-ok
 uv run hf upload hedgehog0/Qwen3.5-0.8B-Math-Questions qwen35_math_output/train.parquet train.parquet --repo-type dataset
 uv run hf upload hedgehog0/Qwen3.5-0.8B-Math-Questions README.md README.md --repo-type dataset
 ```
@@ -51,7 +51,7 @@ model_id = "Qwen/Qwen3.5-0.8B"
 tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
-    torch_dtype=torch.float16,
+    dtype=torch.float16,
     trust_remote_code=True,
 )
 generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
