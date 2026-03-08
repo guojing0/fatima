@@ -17,17 +17,10 @@ pretty_name: Qwen3.5-0.8B-Base Math Blind Spots
 
 This project uses `Qwen/Qwen3.5-0.8B-Base` to solve math problems from different fields, and then saves the first 20 mistakes.
 
-- Model tested: [Qwen/Qwen3.5-0.8B-Base](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base)
+- Model tested: [Qwen/Qwen3.5-0.8B-Base](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base) (created on *February 28, 2026*)
 - Script: [Code on Github](https://github.com/guojing0/fatima) or see [Colab notebook](https://colab.research.google.com/drive/1AFqtgDWLMsdgXC-ka8kQL3bojfmMv0kf?usp=sharing)
 - Output file format: `train.parquet`
 - Fields: `id`, `input`, `expected_output`, `model_output`, `parsed_model_answer`
-
-## Model selection check
-
-- Browsing source: [Hugging Face trending models (0.6B to 6B)](https://huggingface.co/models?num_parameters=min:0.6B,max:6B&sort=trending)
-- Selected model is a base model: [Qwen/Qwen3.5-0.8B-Base](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base)
-- Parameter range requirement: `0.8B` (within `0.6B` to `6B`)
-- Recency requirement: model created on **February 28, 2026** (within 6 months of this project date, March 2026), from [HF model metadata API](https://huggingface.co/api/models/Qwen/Qwen3.5-0.8B-Base)
 
 ## Local run with uv
 
@@ -97,12 +90,11 @@ Since I am experimenting with a small model (0.8B), I expect it to make some mis
 
 **Questions**: Discuss what kind of dataset do you think the model should be fine-tuned on to fix such errors. How would you assemble or find such a dataset? How big of a dataset do you think you’d need?
 
-**Answer**: To reduce these errors, I would assemble a mixed math SFT dataset that is explicitly balanced by topic and answer format.
+**Answer**: To reduce these errors, I would assemble a mixed math SFT dataset that is balanced by topic and answer format.
 
 Popular public sources:
 
 - [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) - strong baseline for grade-school arithmetic and word problems.
-- [hendrycks/competition_math](https://huggingface.co/datasets/hendrycks/competition_math) - harder algebra, geometry, number theory, and proof-style reasoning.
 - [meta-math/MetaMathQA](https://huggingface.co/datasets/meta-math/MetaMathQA) - large synthetic math QA data for instruction tuning.
 - [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT) - chain-of-thought style math supervision from recent open training pipelines.
 - [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) - modern open math instruct mixture with broad topic coverage.
