@@ -5,22 +5,22 @@ task_categories:
 language:
 - en
 tags:
+- qwen3.5
 - math
 - evaluation
-- llm-blind-spots
 pretty_name: Qwen3.5-0.8B Math Blind Spots
 ---
 
 # Qwen3.5-0.8B Math Blind Spots
 
-This project tests `Qwen/Qwen3.5-0.8B` on diverse math prompts and saves the first 10 mistakes.
+This project uses `Qwen/Qwen3.5-0.8B` to solve math problems from different fields, and then saves the first 20 mistakes.
 
 - Model tested: [Qwen/Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B)
-- Script: `qwen35-0.8b-math.py`
-- Output file format: `train.parquet` (Hub dataset viewer friendly)
-- Fields: `id`, `input`, `expected_output`, `model_output`, `parsed_model_answer`, `model_id`
+- Script: [Code on Github]() or see [Colab notebook]()
+- Output file format: `train.parquet`
+- Fields: `id`, `input`, `expected_output`, `model_output`, `parsed_model_answer`
 
-## Local Run With uv
+## Local run with uv
 
 ```bash
 cd fatima
@@ -28,11 +28,9 @@ uv sync
 uv run python qwen35-0.8b-math.py
 ```
 
-The script writes:
+It writes the output (first 20 mistakes) to `qwen35_math_output/train.parquet`.
 
-- `qwen35_math_output/train.parquet`
-
-## Upload As Public Dataset (hf CLI)
+## Upload the public dataset
 
 ```bash
 uv run hf auth login
@@ -41,7 +39,7 @@ uv run hf upload hedgehog0/Qwen3.5-0.8B-Math-Questions qwen35_math_output/train.
 uv run hf upload hedgehog0/Qwen3.5-0.8B-Math-Questions README.md README.md --repo-type dataset
 ```
 
-## How The Model Is Loaded
+## How to load the model
 
 ```python
 import torch
