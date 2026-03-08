@@ -1,26 +1,22 @@
-import torch
-from datasets import Dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
-
 import os
 import re
 from fractions import Fraction
 
+import torch
+from datasets import Dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
+
+# Configs
 MODEL_ID = "Qwen/Qwen3.5-0.8B"
 DATASET_SIZE = 20
 MAX_NEW_TOKENS = 80
 
-PUSH_TO_HUB = True
-DATASET_REPO_ID = "hedgehog0/Qwen3.5-0.8B-Math-Questions"
-OUTPUT_DIR = "qwen35_math_output"
-PARQUET_NAME = "train.parquet"
-README_PATH = "README.md"
-
 NUMBER_PATTERN = re.compile(r"-?\d+\s*/\s*-?\d+|-?\d+\.\d+|-?\d+")
+
 SYSTEM_PROMPT = (
-    "You are solving a math problem. "
-    "Do not think. Do not show steps. "
+    "You are solving a math problem.\n"
+    "Do not think. Do not show steps.\n"
     "Return only the final numeric answer."
 )
 
@@ -78,57 +74,51 @@ p50|What is the smallest prime greater than 100?|101
 """.strip()
 
 
+# Helper functions
 def parse_number(text):
-    if text is None:
+    """Parse a string into a Fraction, handling percentages (e.g. '25%') and common formatting."""
+    if not text:
         return None
 
-    cleaned = text.strip().lower().replace(",", "").replace("−", "-").rstrip(".")
-    if cleaned.endswith("%"):
-        cleaned = cleaned[:-1]
-        try:
-            return Fraction(cleaned) / 100
-        except Exception:
-            return None
+    cleaned = str(text).strip().lower().replace(",", "").replace("−", "-").rstrip(".")
+    scale = Fraction(1, 100) if cleaned.endswith("%") else Fraction(1)
+    cleaned = cleaned.rstrip("%")
 
     try:
-        return Fraction(cleaned)
-    except Exception:
+        return Fraction(cleaned) * scale
+    except (ValueError, ZeroDivisionError):
         return None
 
 
 def extract_numeric_answer(text):
+    """Extract the numeric answer from model output, preferring \\boxed{...} or the last number match."""
     if not text:
         return ""
 
-    boxed = re.search(r"\\boxed\{([^}]*)\}", text)
-    if boxed:
-        return boxed.group(1).strip()
+    text = m.group(1) if (m := re.search(r"\\boxed\{([^}]*)\}", text)) else text
+    matches = NUMBER_PATTERN.findall(text)
 
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    candidate = lines[-1] if lines else text.strip()
-    candidate = candidate.replace("Final answer:", "").replace("Answer:", "").strip()
-
-    matches = NUMBER_PATTERN.findall(candidate)
-    if not matches:
-        matches = NUMBER_PATTERN.findall(text)
-
-    return matches[-1].replace(" ", "") if matches else candidate
+    return matches[-1].replace(" ", "") if matches else text.strip()
 
 
 def is_correct(expected_output, model_output):
-    parsed = extract_numeric_answer(model_output)
+    parsed_answer = extract_numeric_answer(model_output)
+    pred_num = parse_number(parsed_answer)
+
     expected_num = parse_number(expected_output)
-    pred_num = parse_number(parsed)
 
     if expected_num is None or pred_num is None:
-        return parsed.lower() == expected_output.strip().lower(), parsed
+        expected_text = str(expected_output).strip().lower()
+        return parsed_answer.strip().lower() == expected_text, parsed_answer
+
     if expected_num == pred_num:
-        return True, parsed
+        return True, parsed_answer
 
     try:
-        return abs(float(expected_num) - float(pred_num)) <= 1e-6, parsed
+        is_close = abs(float(expected_num) - float(pred_num)) <= 1e-6
     except Exception:
-        return False, parsed
+        is_close = False
+    return is_close, parsed_answer
 
 
 def load_problems():
@@ -140,6 +130,7 @@ def load_problems():
 
 
 def main():
+    # Load prompts and model.
     problems = load_problems()
     print(f"Loaded {len(problems)} math prompts.")
 
@@ -147,10 +138,9 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    if torch.cuda.is_available() or torch.backends.mps.is_available():
-        dtype = torch.float16
-    else:
-        dtype = torch.float32
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    dtype = torch.float16 if device in {"cuda", "mps"} else torch.float32
+    print(f"Using device: {device} with dtype: {dtype}")
 
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
@@ -158,11 +148,11 @@ def main():
         trust_remote_code=True,
     )
 
-    if torch.cuda.is_available():
-        model = model.to("cuda")
-    elif torch.backends.mps.is_available():
-        model = model.to("mps")
+    if device != "cpu":
+        print(f"Moving model to device: {device}")
+        model = model.to(device)
 
+    # Keep generation deterministic and bounded.
     generation_config = GenerationConfig(
         do_sample=False,
         max_new_tokens=MAX_NEW_TOKENS,
@@ -170,6 +160,7 @@ def main():
         eos_token_id=tokenizer.eos_token_id,
     )
 
+    # Run evaluation and keep the first DATASET_SIZE mistakes.
     mistakes = []
     checked_count = 0
     for idx, item in enumerate(problems, start=1):
@@ -191,7 +182,8 @@ def main():
                 generation_config=generation_config,
             )
 
-        new_token_ids = output_ids[0, model_inputs["input_ids"].shape[1]:]
+        input_len = model_inputs["input_ids"].shape[1]
+        new_token_ids = output_ids[0, input_len:]
         completion = tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
         if not completion:
             completion = tokenizer.decode(new_token_ids, skip_special_tokens=False).strip()
@@ -205,7 +197,6 @@ def main():
                     "expected_output": item["expected_output"],
                     "model_output": completion,
                     "parsed_model_answer": parsed,
-                    "model_id": MODEL_ID,
                 }
             )
 
@@ -216,15 +207,17 @@ def main():
 
     print(f"\nMistakes collected: {len(mistakes)}")
     print(f"Checked {checked_count}/{len(problems)} prompts total.")
+
     if len(mistakes) < DATASET_SIZE:
         raise RuntimeError(f"Only found {len(mistakes)} mistakes. Add more prompts.")
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    # Export mistakes as HF parquet file.
+    os.makedirs("qwen35_math_output", exist_ok=True)
     dataset = Dataset.from_list(mistakes)
-    parquet_path = os.path.join(OUTPUT_DIR, PARQUET_NAME)
+    parquet_path = os.path.join("qwen35_math_output", "train.parquet")
     dataset.to_parquet(parquet_path)
 
-    print("Saved local output:")
+    print("Saved HF parquet file:")
     print("-", parquet_path)
 
 if __name__ == "__main__":
