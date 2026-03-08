@@ -8,19 +8,26 @@ tags:
 - qwen3.5
 - math
 - evaluation
-pretty_name: Qwen3.5-0.8B Math Blind Spots
+pretty_name: Qwen3.5-0.8B-Base Math Blind Spots
 ---
 
 [**Corresponding Google Colab Notebook**]()
 
-# Qwen3.5-0.8B Math Blind Spots
+# Qwen3.5-0.8B-Base Math Blind Spots
 
-This project uses `Qwen/Qwen3.5-0.8B` to solve math problems from different fields, and then saves the first 20 mistakes.
+This project uses `Qwen/Qwen3.5-0.8B-Base` to solve math problems from different fields, and then saves the first 20 mistakes.
 
-- Model tested: [Qwen/Qwen3.5-0.8B](https://huggingface.co/Qwen/Qwen3.5-0.8B)
+- Model tested: [Qwen/Qwen3.5-0.8B-Base](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base)
 - Script: [Code on Github]() or see [Colab notebook]()
 - Output file format: `train.parquet`
 - Fields: `id`, `input`, `expected_output`, `model_output`, `parsed_model_answer`
+
+## Model selection check
+
+- Browsing source: [Hugging Face trending models (0.6B to 6B)](https://huggingface.co/models?num_parameters=min:0.6B,max:6B&sort=trending)
+- Selected model is a base model: [Qwen/Qwen3.5-0.8B-Base](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base)
+- Parameter range requirement: `0.8B` (within `0.6B` to `6B`)
+- Recency requirement: model created on **February 28, 2026** (within 6 months of this project date, March 2026), from [HF model metadata API](https://huggingface.co/api/models/Qwen/Qwen3.5-0.8B-Base)
 
 ## Local run with uv
 
@@ -47,7 +54,7 @@ uv run hf upload hedgehog0/Qwen3.5-0.8B-Math-Questions README.md README.md --rep
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-model_id = "Qwen/Qwen3.5-0.8B"
+model_id = "Qwen/Qwen3.5-0.8B-Base"
 tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
@@ -74,15 +81,41 @@ Since I am experimenting with a small model (0.8B), I expect it to make some mis
 4. It does not always do algebra calculation and manipulation correctly.
 5. It sometimes fails to follow the format of the final answer, even if we ask explicitly.
 
+### Mistake diversity summary (20 rows in `train.parquet`)
+
+| Topic | Count | IDs | Typical failure |
+|---|---:|---|---|
+| Arithmetic and numeric sums | 3 | p01, p08, p26 | Arithmetic slip in multi-step numeric computation |
+| Percent, ratio, rate, and probability word problems | 4 | p09, p24, p31, p32 | Mis-translation from words to the right formula |
+| Algebra and equations | 4 | p15, p17, p42, p43 | Returns intermediate value instead of target variable |
+| Number theory and divisibility | 4 | p18, p19, p20, p41 | Incorrect modular or gcd/remainder reasoning |
+| Linear algebra | 2 | p35, p36 | Matrix operation mistakes |
+| Statistics | 2 | p39, p40 | Picks wrong statistic (median/mode confusion) |
+| Calculus | 1 | p33 | Derivative evaluation error |
+
 ## Fine-tuning datasets
 
 **Questions**: Discuss what kind of dataset do you think the model should be fine-tuned on to fix such errors. How would you assemble or find such a dataset? How big of a dataset do you think you’d need?
 
-**Answer**: To reduce these kinds of errors, we can use mixed curriculum datasets from popular public math datasets on Hugging Face, such as the following popular ones:
+**Answer**: To reduce these errors, I would assemble a mixed math SFT dataset that is explicitly balanced by topic and answer format.
+
+Popular public sources:
 
 - [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) - strong baseline for grade-school arithmetic and word problems.
+- [hendrycks/competition_math](https://huggingface.co/datasets/hendrycks/competition_math) - harder algebra, geometry, number theory, and proof-style reasoning.
 - [meta-math/MetaMathQA](https://huggingface.co/datasets/meta-math/MetaMathQA) - large synthetic math QA data for instruction tuning.
 - [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT) - chain-of-thought style math supervision from recent open training pipelines.
 - [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) - modern open math instruct mixture with broad topic coverage.
 
-For concrete steps, we could start with easier data (e.g., `gsm8k`, easier subset of `MetaMathQA`) to stabilize the answer format. Further, we can add medium and hard problems (e.g., `MathInstruct` and `NuminaMath-CoT`) for reasoning depth. To make sure that for answer format is correct, we only need to keep strict target normalization for integers, fractions, decimals, and percentages in our training pipeline.
+How I would assemble it:
+
+1. Build a union of these datasets and keep only problem-answer pairs with parseable final answers.
+2. Normalize targets into canonical forms for integer, fraction, decimal, and percent.
+3. Add metadata labels (`topic`, `difficulty`, `answer_type`) and rebalance to match observed blind spots.
+4. Deduplicate near-identical questions and filter low-quality or contradictory samples.
+5. Keep a held-out evaluation split focused on the same blind-spot categories.
+
+Recommended size:
+
+- Minimum useful: 40k to 80k high-quality examples for measurable gains.
+- Strong target: 150k to 300k balanced examples for robust improvement across all listed topics.
