@@ -11,14 +11,14 @@ tags:
 pretty_name: Qwen3.5-0.8B-Base Math Blind Spots
 ---
 
-[**Corresponding Google Colab Notebook**]()
+[**Corresponding Google Colab Notebook**](https://colab.research.google.com/drive/1AFqtgDWLMsdgXC-ka8kQL3bojfmMv0kf?usp=sharing)
 
 # Qwen3.5-0.8B-Base Math Blind Spots
 
 This project uses `Qwen/Qwen3.5-0.8B-Base` to solve math problems from different fields, and then saves the first 20 mistakes.
 
 - Model tested: [Qwen/Qwen3.5-0.8B-Base](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base)
-- Script: [Code on Github]() or see [Colab notebook]()
+- Script: [Code on Github](https://github.com/guojing0/fatima) or see [Colab notebook](https://colab.research.google.com/drive/1AFqtgDWLMsdgXC-ka8kQL3bojfmMv0kf?usp=sharing)
 - Output file format: `train.parquet`
 - Fields: `id`, `input`, `expected_output`, `model_output`, `parsed_model_answer`
 
