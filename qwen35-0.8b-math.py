@@ -8,7 +8,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, GenerationConfig
 
 
 # Configs
-MODEL_ID = "Qwen/Qwen3.5-0.8B"
+MODEL_ID = "Qwen/Qwen3.5-0.8B-Base"
 DATASET_SIZE = 20
 MAX_NEW_TOKENS = 80
 
