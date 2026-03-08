@@ -43,29 +43,36 @@ uv run hf upload hedgehog0/Qwen3.5-0.8B-Math-Questions README.md README.md --rep
 
 ```python
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 model_id = "Qwen/Qwen3.5-0.8B"
 tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+dtype = torch.float16 if device in {"cuda", "mps"} else torch.float32
+
 model = AutoModelForCausalLM.from_pretrained(
     model_id,
-    dtype=torch.float16,
+    dtype=dtype,
     trust_remote_code=True,
 )
-generator = pipeline("text-generation", model=model, tokenizer=tokenizer)
+if device != "cpu":
+    model = model.to(device)
 ```
 
-## Typical Blind Spots
+## Blind spots
 
-Common failure types observed:
+Since I am experimenting with a small model (0.8B), I expect it to make some mistakes and I have noticed that it would make the following mistakes:
 
-- Multi-step arithmetic slips
-- Fraction and percentage normalization mistakes
-- Modular arithmetic errors
-- Wrong algebra manipulation
-- Format-following failures when asked for final answer only
+1. There are calculation slips when the computation is multi-steps.
+2. It makes mistakes when converting fractions to percentages, and vice versa.
+3. It has troubles with modular arithmetic.
+4. It does not always do algebra calculation and manipulation correctly.
+5. It sometimes fails to follow the format of the final answer, even if we ask explicitly.
 
-## Fine-Tuning Dataset Recommendation
+## Fine-tuning dataset recommendation
 
 To reduce these errors, fine-tune on a supervised math dataset with:
 
