@@ -11,6 +11,8 @@ tags:
 pretty_name: Qwen3.5-0.8B Math Blind Spots
 ---
 
+[**Corresponding Google Colab Notebook**]()
+
 # Qwen3.5-0.8B Math Blind Spots
 
 This project uses `Qwen/Qwen3.5-0.8B` to solve math problems from different fields, and then saves the first 20 mistakes.
@@ -72,16 +74,15 @@ Since I am experimenting with a small model (0.8B), I expect it to make some mis
 4. It does not always do algebra calculation and manipulation correctly.
 5. It sometimes fails to follow the format of the final answer, even if we ask explicitly.
 
-## Fine-tuning dataset recommendation
+## Fine-tuning datasets
 
-To reduce these errors, fine-tune on a supervised math dataset with:
+**Questions**: Discuss what kind of dataset do you think the model should be fine-tuned on to fix such errors. How would you assemble or find such a dataset? How big of a dataset do you think you’d need?
 
-- Broad topic coverage: arithmetic, algebra, geometry, probability, number theory, rates, word problems
-- Multiple paraphrases per problem type
-- Mixed difficulty levels
-- Strict normalized targets for integer, fraction, decimal, and percentage outputs
+**Answer**: To reduce these kinds of errors, we can use mixed curriculum datasets from popular public math datasets on Hugging Face, such as the following popular ones:
 
-Suggested size:
+- [openai/gsm8k](https://huggingface.co/datasets/openai/gsm8k) - strong baseline for grade-school arithmetic and word problems.
+- [meta-math/MetaMathQA](https://huggingface.co/datasets/meta-math/MetaMathQA) - large synthetic math QA data for instruction tuning.
+- [AI-MO/NuminaMath-CoT](https://huggingface.co/datasets/AI-MO/NuminaMath-CoT) - chain-of-thought style math supervision from recent open training pipelines.
+- [nvidia/OpenMathInstruct-2](https://huggingface.co/datasets/nvidia/OpenMathInstruct-2) - modern open math instruct mixture with broad topic coverage.
 
-- Minimum useful: 30k to 60k high-quality supervised examples
-- Stronger: 100k to 300k examples with balanced topic coverage and filtering
+For concrete steps, we could start with easier data (e.g., `gsm8k`, easier subset of `MetaMathQA`) to stabilize the answer format. Further, we can add medium and hard problems (e.g., `MathInstruct` and `NuminaMath-CoT`) for reasoning depth. To make sure that for answer format is correct, we only need to keep strict target normalization for integers, fractions, decimals, and percentages in our training pipeline.
